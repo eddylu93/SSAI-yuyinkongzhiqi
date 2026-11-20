@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>SSAI-语音控制器 使用你选定的麦克风进行试听。</string>
+</dict></plist>
