@@ -190,7 +190,7 @@ pub fn run(){
         let open=MenuItem::with_id(app,"open","打开 SSAI-语音控制器",true,None::<&str>)?;
         let quit=MenuItem::with_id(app,"quit","退出",true,None::<&str>)?;
         let menu=Menu::with_items(app,&[&open,&quit])?;
-        TrayIconBuilder::new().icon(app.default_window_icon().unwrap().clone()).tooltip("SSAI-语音控制器").menu(&menu)
+        TrayIconBuilder::new().icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?).tooltip("SSAI-语音控制器").menu(&menu)
             .on_menu_event(|app,event|match event.id.as_ref(){
                 "open"=>if let Some(w)=app.get_webview_window("main"){let _=w.show();let _=w.set_focus();},
                 "quit"=>app.exit(0),_=>{}

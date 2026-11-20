@@ -13,7 +13,7 @@ if (!$StageOnly) {
     Run-Checked cargo @('test','--locked','--features','custom-protocol','--manifest-path','src-tauri/Cargo.toml')
     Run-Checked cargo @('build','--locked','--release','--features','custom-protocol','--manifest-path','src-tauri/Cargo.toml')
 }
-$stage = 'release/windows-0.8.0'
+$stage = 'release/windows-0.8.1'
 $buildDir = 'src-tauri/target/release'
 New-Item -Force -ItemType Directory $stage | Out-Null
 foreach ($pair in @(@("$buildDir/au05-desk.exe","$stage/AU05Desk.exe"),@("$buildDir/WebView2Loader.dll","$stage/WebView2Loader.dll"))) {

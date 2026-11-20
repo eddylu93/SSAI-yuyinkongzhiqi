@@ -67,7 +67,7 @@ button.primary:hover:not(:disabled) { color:white; filter:brightness(1.12); }
 button.quiet { display:inline-flex; align-items:center; gap:4px; background:transparent; border-color:transparent; }
 button.danger,.danger { color:var(--danger); }
 .title-strip { position:absolute; z-index:4; inset:0 0 auto; height:28px; user-select:none; }
-.product-title { position:absolute; inset:5px 0 auto; text-align:center; color:var(--muted); font-size:12px; pointer-events:none; }
+.product-title { position:absolute; inset:4px 0 auto; display:flex; align-items:center; justify-content:center; gap:5px; color:var(--muted); font-size:12px; pointer-events:none; }
 .project-info { display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px; color:var(--muted); font-size:12px; padding:10px 0; }
 .mapping-page .project-info { justify-content:center; padding-bottom:0; }
 .project-info a { color:var(--accent); overflow-wrap:anywhere; }
@@ -216,7 +216,7 @@ dialog::backdrop { background:#070b1280; }
 .setting-row>button,.setting-row>select { flex-shrink:0; }
 .about-app { display:flex; align-items:center; gap:12px; }
 .about-app h2 { margin:0; font-size:20px; }
-.about-app .device-glyph { width:44px; height:44px; }
+.about-app img { flex:none; }
 .sequence-steps li { padding:6px; border-bottom:1px solid var(--soft-border); }
 .step-action { min-width:36%; text-align:left; }
 

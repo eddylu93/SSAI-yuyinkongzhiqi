@@ -1,10 +1,12 @@
 Unicode true
 RequestExecutionLevel user
 Name "SSAI-语音控制器"
-!define STAGE "..\release\windows-0.8.0"
-OutFile "${STAGE}\SSAI-yuyinkongzhiqi-0.8.0-x64-setup.exe"
+!define STAGE "..\release\windows-0.8.1"
+OutFile "${STAGE}\SSAI-yuyinkongzhiqi-0.8.1-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\AU05 Desk"
 !include "MUI2.nsh"
+!define MUI_ICON "..\src-tauri\icons\icon.ico"
+!define MUI_UNICON "..\src-tauri\icons\icon.ico"
 !define APPKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\AU05Desk"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
@@ -29,9 +31,10 @@ Section "SSAI-语音控制器"
   Delete "$SMPROGRAMS\AU05 Desk.lnk"
   CreateShortcut "$SMPROGRAMS\SSAI-语音控制器.lnk" "$INSTDIR\AU05Desk.exe"
   WriteRegStr HKCU "${APPKEY}" "DisplayName" "SSAI-语音控制器"
+  WriteRegStr HKCU "${APPKEY}" "DisplayIcon" '"$INSTDIR\AU05Desk.exe",0'
   WriteRegStr HKCU "${APPKEY}" "Publisher" "三笙"
   WriteRegStr HKCU "${APPKEY}" "URLInfoAbout" "https://github.com/eddylu93/SSAI-yuyinkongzhiqi"
-  WriteRegStr HKCU "${APPKEY}" "DisplayVersion" "0.8.0"
+  WriteRegStr HKCU "${APPKEY}" "DisplayVersion" "0.8.1"
   WriteRegStr HKCU "${APPKEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 Section "Uninstall"

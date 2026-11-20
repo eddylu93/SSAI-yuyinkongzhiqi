@@ -1,6 +1,8 @@
 <script setup>
 import {ref,computed,onMounted,onBeforeUnmount,nextTick,watch} from 'vue';
 import {invoke} from '@tauri-apps/api/core';
+import brandIcon from '../src-tauri/icons/ssai.svg';
+import smallBrandIcon from '../src-tauri/icons/ssai-small.svg';
 import ProjectInfo from './ProjectInfo.vue';
 import rawRepository from './repository.txt?raw';
 import {checkRelease} from './releases.js';
@@ -132,7 +134,7 @@ onMounted(()=>act(async()=>{systemTheme.addEventListener('change',syncTheme);awa
 onBeforeUnmount(()=>{alive=false;clearInterval(timer);clearTimeout(noticeTimer);systemTheme.removeEventListener('change',syncTheme)});
 </script>
 <template><div id="desk" :class="{light:c?.theme==='light'||(c?.theme==='system'&&prefersLight)}">
-<div class="title-strip" @mousedown.self.left="windowAction('drag')" @dblclick.self="windowAction('zoom')"><span class="product-title">SSAI-语音控制器</span><div class="window-buttons"><button aria-label="隐藏到托盘" title="隐藏到托盘" @click="windowAction('hide')"></button><button aria-label="最小化" title="最小化" @click="windowAction('minimize')"></button><button aria-label="最大化或还原" title="最大化或还原" @click="windowAction('zoom')"></button></div></div>
+<div class="title-strip" @mousedown.self.left="windowAction('drag')" @dblclick.self="windowAction('zoom')"><span class="product-title"><img :src="smallBrandIcon" alt="" width="16" height="16">SSAI-语音控制器</span><div class="window-buttons"><button aria-label="隐藏到托盘" title="隐藏到托盘" @click="windowAction('hide')"></button><button aria-label="最小化" title="最小化" @click="windowAction('minimize')"></button><button aria-label="最大化或还原" title="最大化或还原" @click="windowAction('zoom')"></button></div></div>
 <nav aria-label="主导航"><button v-for="[t,icon] in nav" :key="t" :class="{active:t===tab}" :aria-current="t===tab?'page':undefined" @click="act(()=>go(t))"><component :is="icon" :size="25" weight="bold" aria-hidden="true"/>{{t}}</button></nav>
 <article><header class="app-header"><div class="heading-group"><h1>{{titles[tab]}}</h1><label v-if="tab==='按键'&&c" class="map-toggle"><input class="switch" type="checkbox" v-model="c.enabled" @change="save">自定义按键</label></div>
 <button class="device" :class="{connected}" title="查看设备连接" @click="act(()=>go('连接'))"><span class="device-glyph"><PhMicrophone :size="20" weight="bold" aria-hidden="true"/></span><span class="device-details"><strong>Ulanzi AU05</strong><small><span class="mic-state">{{connected?'已连接':'未连接'}}</span><span class="battery-reading" :title="battery===null?'电量未知':'机身电量 '+battery+'%'"><span class="battery-icon" aria-hidden="true"><i :style="{width:(battery??0)+'%'}"></i></span>{{battery===null?'—':battery+'%'}}</span></small></span><PhCaretDown :size="14"/></button></header>
@@ -159,7 +161,7 @@ onBeforeUnmount(()=>{alive=false;clearInterval(timer);clearTimeout(noticeTimer);
  <div class="setting-row"><div><strong>模拟按键</strong><p class="muted">若高权限窗口无法接收快捷键，请在普通编辑器中复测。</p></div><button @click="act(()=>go('连接','按键测试'))">测试按键</button></div></div>
  <div class="block"><div class="setting-row"><h2>诊断摘要</h2><button @click="act(()=>copy(diagnosis()))">复制摘要</button></div><pre>{{diagnosis()}}</pre></div>
  <div class="block"><div class="setting-row"><div><h2>连接向导</h2><p class="muted">依次检查设备、麦克风和听写结果。</p></div><button @click="act(startSetup)">重新运行向导</button></div></div></template>
-<template v-if="tab==='关于'"><div v-if="sub==='应用设置'" class="block"><div class="about-app"><span class="device-glyph"><PhMicrophone :size="25"/></span><div><h2>SSAI-语音控制器</h2><small>独立桌面端 · {{version}}</small></div></div>
+<template v-if="tab==='关于'"><div v-if="sub==='应用设置'" class="block"><div class="about-app"><img :src="brandIcon" alt="" width="44" height="44"><div><h2>SSAI-语音控制器</h2><small>独立桌面端 · {{version}}</small></div></div>
  <ProjectInfo @open="openProject()"/>
  <div class="setting-row"><div><strong>软件更新</strong><p class="muted" role="status">{{updateMessage}}</p></div><button :disabled="checking" @click="checkUpdates">{{checking?'正在检查…':'检查更新'}}</button></div>
  <div class="setting-row"><div><strong>外观</strong><p class="muted">选择桌面软件的配色。</p></div><select aria-label="外观" v-model="c.theme" @change="save"><option value="dark">深色</option><option value="light">浅色</option><option value="system">跟随系统</option></select></div>
