@@ -1,6 +1,6 @@
 {
   "productName": "SSAI-语音控制器",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "identifier": "app.au05desk.desktop",
   "build": {
     "frontendDist": "../dist",

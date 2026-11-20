@@ -1,8 +1,8 @@
 Unicode true
 RequestExecutionLevel user
 Name "SSAI-语音控制器"
-!define STAGE "..\release\windows-0.8.1"
-OutFile "${STAGE}\SSAI-yuyinkongzhiqi-0.8.1-x64-setup.exe"
+!define STAGE "..\release\windows-0.8.2"
+OutFile "${STAGE}\SSAI-yuyinkongzhiqi-0.8.2-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\AU05 Desk"
 !include "MUI2.nsh"
 !define MUI_ICON "..\src-tauri\icons\icon.ico"
@@ -34,7 +34,7 @@ Section "SSAI-语音控制器"
   WriteRegStr HKCU "${APPKEY}" "DisplayIcon" '"$INSTDIR\AU05Desk.exe",0'
   WriteRegStr HKCU "${APPKEY}" "Publisher" "三笙"
   WriteRegStr HKCU "${APPKEY}" "URLInfoAbout" "https://github.com/eddylu93/SSAI-yuyinkongzhiqi"
-  WriteRegStr HKCU "${APPKEY}" "DisplayVersion" "0.8.1"
+  WriteRegStr HKCU "${APPKEY}" "DisplayVersion" "0.8.2"
   WriteRegStr HKCU "${APPKEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 Section "Uninstall"
