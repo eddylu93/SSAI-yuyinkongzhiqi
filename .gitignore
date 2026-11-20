@@ -1,6 +1,0 @@
-node_modules/
-target/
-dist/
-release/
-__pycache__/
-src-tauri/gen/
