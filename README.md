@@ -1,8 +1,14 @@
 # SSAI-语音控制器
 
-SSAI-语音控制器 是独立的桌面软件。设备按键直接从系统 HID 接口进入桌面程序，语音使用系统中的 AU05 麦克风。Windows 发行包包含设备输入、映射、语音、设置和本地只读历史接口。运行时依赖为 Windows 10/11 x64 和 WebView2 Runtime。
+SSAI-语音控制器是一款为 Ulanzi AU05 设计的 Windows 桌面软件。你可以把打开应用、聚焦聊天框、滚动页面和常用快捷键分配给旋钮或按键。选好语音输入工具后，按住语音键说话，松开就能在当前输入框看到听写结果。
 
 作者 **三笙** · 微信 **sanshengya88** · [GitHub 仓库](https://github.com/eddylu93/SSAI-yuyinkongzhiqi) · [下载正式版](https://github.com/eddylu93/SSAI-yuyinkongzhiqi/releases/latest)
+
+![SSAI-语音控制器的按键映射主界面，中央的 AU05 三维模型通过连线对应左侧的旋钮动作和右侧的三个按键](docs/界面素材/main-window.png)
+
+以图中的微信配置为例：单击旋钮调出微信，双击旋钮聚焦聊天输入框，再按住语音键，用微信输入法听写。点击模型两侧的动作格可以修改绑定，例如把确认键的单击设为 Enter、双击设为 Tab。拖动中央模型可以从不同角度查看设备。
+
+支持 Windows 10/11 x64，需要 WebView2 Runtime。
 
 软件启动时及运行期间每六小时检查 GitHub 正式发布版本。可在「关于 → 应用设置」手动检查更新。
 
