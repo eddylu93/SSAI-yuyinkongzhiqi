@@ -241,6 +241,18 @@ fn wechat_main(hwnd: HWND, style: u32, title: &str) -> bool {
         }
 }
 
+pub(super) fn is_wechat_main(hwnd: HWND) -> bool {
+    let mut title = [0; 256];
+    unsafe {
+        GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32);
+        wechat_main(hwnd, GetWindowLongW(hwnd, GWL_STYLE) as u32, &wide_text(&title))
+    }
+}
+
+pub fn wechat_qt_window(window: isize) -> bool {
+    class_of(window as HWND).starts_with("Qt")
+}
+
 fn pick_window(
     target: &Target,
     pids: &HashSet<u32>,
@@ -302,6 +314,42 @@ fn pick_window(
             }
         }
         Ok(best)
+    }
+}
+
+// Process.MainWindowHandle in PowerShell excludes hidden tray windows.
+// Restore the same verified chat frame used by the Launch action before UIA runs.
+pub fn restore_wechat_for_focus() -> Result<(), String> {
+    let mut windows: Vec<HWND> = Vec::new();
+    let mut matches = Vec::new();
+    unsafe {
+        if EnumWindows(Some(collect_window), &mut windows as *mut _ as LPARAM) == 0 {
+            return Err("无法枚举微信窗口".into());
+        }
+        for hwnd in windows {
+            if !is_wechat_main(hwnd) {
+                continue;
+            }
+            let pid = pid_of(hwnd);
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if process.is_null() { continue; }
+            let mut path = [0; 32768];
+            let mut len = path.len() as u32;
+            let ok = QueryFullProcessImageNameW(process, 0, path.as_mut_ptr(), &mut len) != 0;
+            CloseHandle(process);
+            if ok && Path::new(&String::from_utf16_lossy(&path[..len as usize]))
+                .file_name().is_some_and(|f| matches!(f.to_string_lossy().to_lowercase().as_str(), "weixin.exe" | "wechat.exe")) {
+                matches.push(Window { handle: hwnd as usize, pid });
+            }
+        }
+        if matches.iter().any(|w| w.handle == GetForegroundWindow() as usize) {
+            return Ok(());
+        }
+    }
+    match matches.as_slice() {
+        [] => Ok(()), // The normal resolver also supports cold starts and other client builds.
+        [window] => { activate(*window); Ok(()) },
+        _ => Err("找到多个微信窗口，请先打开目标对话".into()),
     }
 }
 
@@ -514,6 +562,28 @@ mod tests {
                 assert!(unsafe { IsIconic(original.0) != 0 || IsWindowVisible(original.0) == 0 });
                 assert_eq!(activate_and_wait(&mut launcher), original);
             }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a signed-in WeChat desktop client with a chat open"]
+    fn focus_existing_wechat_in_each_window_state() {
+        let binding = std::env::var("AU05_TEST_LAUNCH_TARGET").unwrap();
+        let target = Target::new(&binding).unwrap();
+        assert!(target.wechat);
+        let before = target.running().unwrap();
+        let main = pick_window(&target, &before, None).unwrap().unwrap();
+        for state in [SW_SHOW, SW_MINIMIZE, SW_HIDE] {
+            unsafe { ShowWindowAsync(main.handle as HWND, state); }
+            std::thread::sleep(Duration::from_millis(250));
+            let mut job = crate::composer::FocusJob::start(crate::composer::target("wechat").unwrap()).unwrap();
+            let result = loop {
+                if let Some(result) = job.poll() { break result; }
+                std::thread::sleep(Duration::from_millis(80));
+            };
+            assert!(result.is_ok(), "state {state}: {result:?}");
+            assert_eq!(unsafe { GetForegroundWindow() } as usize, main.handle);
+            assert_eq!(target.running().unwrap(), before);
         }
     }
 }

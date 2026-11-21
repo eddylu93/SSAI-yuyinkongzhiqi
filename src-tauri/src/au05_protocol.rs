@@ -44,6 +44,7 @@ pub enum Reply {
     Hooks(bool),
     Online(bool),
     Battery(u8),
+    BatteryStatus { percent: Option<u8>, charging: Option<bool> },
     Button(&'static str, bool),
     Turn(i32),
 }
@@ -68,8 +69,11 @@ pub fn decode(report: &[u8]) -> Option<Reply> {
         (6, 1, 0x23, _) => Some(Reply::Heartbeat),
         (1, 11, 0x89, 0x10) if d[4] <= 1 => Some(Reply::Hooks(d[4] == 1)),
         (6, 3, 0x0a, 0x11) if d[4] <= 1 => Some(Reply::Online(d[4] == 1)),
-        (1, 1, 2, 0x11) if (2000..=5000).contains(&voltage(4)) && voltage(6) <= 100 => {
-            Some(Reply::Battery(d[6]))
+        (1, 1, 2, 0x11) if (2000..=5000).contains(&voltage(4)) => {
+            Some(Reply::BatteryStatus {
+                percent: (voltage(6) <= 100).then_some(d[6]),
+                charging: match d[10] { 0 => Some(false), 1 => Some(true), _ => None },
+            })
         }
         (11, 0x7b, _, _) if (2000..=5000).contains(&voltage(2)) && d[5] <= 100 => {
             Some(Reply::Battery(d[5]))
@@ -126,11 +130,15 @@ mod tests {
         );
         assert_eq!(
             decode(&frame(&[0x81, 1, 2, 0x11, 0xa0, 0x0f, 80, 0])),
-            Some(Reply::Battery(80))
+            Some(Reply::BatteryStatus { percent: Some(80), charging: Some(false) })
         );
         assert_eq!(
             decode(&frame(&[0x81, 1, 2, 0x11, 0xa0, 0x0f, 0xff, 0])),
-            None
+            Some(Reply::BatteryStatus { percent: None, charging: Some(false) })
         );
+        for (flag, expected) in [(0, Some(false)), (1, Some(true)), (0xff, None)] {
+            let captured = [0x81, 1, 2, 0x11, 0x0a, 0x10, 100, 0, 0x29, 2, flag];
+            assert_eq!(decode(&frame(&captured)), Some(Reply::BatteryStatus { percent: Some(100), charging: expected }));
+        }
     }
 }

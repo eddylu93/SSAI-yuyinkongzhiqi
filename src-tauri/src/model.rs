@@ -39,6 +39,11 @@ impl Default for Config{
 }
 pub fn vk(key:&str)->Option<u16>{
     let value=match key{
+        #[cfg(windows)] "鼠标左键"=>0x01,
+        #[cfg(windows)] "鼠标右键"=>0x02,
+        #[cfg(windows)] "鼠标中键"=>0x04,
+        #[cfg(windows)] "鼠标后退键"=>0x05,
+        #[cfg(windows)] "鼠标前进键"=>0x06,
         "Ctrl"=>0x11,"LeftCtrl"=>0xa2,"RightCtrl"=>0xa3,"Alt"|"Option"=>0x12,"LeftAlt"|"LeftOption"=>0xa4,"RightAlt"|"RightOption"=>0xa5,
         "Shift"=>0x10,"LeftShift"=>0xa0,"RightShift"=>0xa1,"Win"|"Cmd"|"LeftCmd"=>0x5b,"RightWin"|"RightCmd"=>0x5c,
         "Enter"=>13,"Esc"=>27,"Tab"=>9,"Backspace"=>8,"Space"=>32,"Delete"=>46,

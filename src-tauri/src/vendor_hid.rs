@@ -135,6 +135,7 @@ pub fn observe(seconds: u64) -> Result<serde_json::Value, String> {
     let mut total = 0u64;
     let mut online = None;
     let mut battery = None;
+    let mut charging = None;
     while start.elapsed() < Duration::from_secs(seconds) {
         let event = match session.next(80)? {
             Some(Reply::Button(control, down)) => serde_json::json!({
@@ -149,6 +150,11 @@ pub fn observe(seconds: u64) -> Result<serde_json::Value, String> {
                 battery = Some(v);
                 continue;
             }
+            Some(Reply::BatteryStatus { percent, charging: flag }) => {
+                battery = percent;
+                charging = flag;
+                continue;
+            }
             _ => continue,
         };
         total += 1;
@@ -156,7 +162,7 @@ pub fn observe(seconds: u64) -> Result<serde_json::Value, String> {
             events.push(serde_json::json!({"ms":start.elapsed().as_millis(),"event":event}));
         }
     }
-    Ok(serde_json::json!({"online":online,"battery":battery,"total":total,"events":events}))
+    Ok(serde_json::json!({"online":online,"battery":battery,"charging":charging,"total":total,"events":events}))
 }
 
 /// Bounded hardware diagnostic; makes no change to the stored device key table.
@@ -237,6 +243,7 @@ impl Worker {
                 let mut d = desk.lock().unwrap();
                 d.vendor_end();
                 d.direct.battery = None;
+                d.direct.charging = None;
                 d.direct.transmitter = None;
                 d.direct.lights = None;
                 d.direct.vendor_status = result.err().unwrap_or_else(|| "设备通道已关闭".into());
@@ -283,7 +290,8 @@ fn run(mut session: Session, desk: &Shared, stop: &AtomicBool) -> Result<(), Str
                 d.direct.battery = None
             }
             if online_seen.elapsed() > SECOND * 25 {
-                d.direct.transmitter = None
+                d.direct.transmitter = None;
+                d.direct.charging = None;
             }
             (d.config.vendor_controls, d.direct.transmitter)
         };
@@ -327,17 +335,23 @@ fn run(mut session: Session, desk: &Shared, stop: &AtomicBool) -> Result<(), Str
         };
         let mut d = desk.lock().unwrap();
         match reply {
-            Reply::Battery(v) => {
+            Reply::Battery(v) if d.direct.transmitter != Some(false) => {
                 d.direct.battery = Some(v);
                 battery_seen = now;
             }
+            Reply::BatteryStatus { percent, charging } if d.direct.transmitter != Some(false) => {
+                d.direct.battery = percent;
+                d.direct.charging = charging.map(|flag| (now, flag));
+                battery_seen = now;
+            }
             Reply::Online(v) => {
-                d.direct.transmitter = Some(v);
+                d.transmitter_online(v);
                 online_seen = now;
                 if !v {
                     d.direct.lights = None;
                     next_lights = now;
                     d.direct.battery = None;
+                    d.direct.charging = None;
                     d.vendor_end();
                     held.clear();
                     active = false;

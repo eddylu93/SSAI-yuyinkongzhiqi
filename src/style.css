@@ -137,6 +137,7 @@ input.switch:checked { background:var(--accent-strong); border-color:transparent
 .device.connected .mic-state { color:var(--good); }
 .device small { gap:9px; }
 .battery-reading { display:inline-flex; gap:5px; align-items:center; font-variant-numeric:tabular-nums; }
+.battery-reading.charging { color:var(--good); }
 .battery-icon { position:relative; display:inline-flex; align-items:stretch; width:17px; height:9px; padding:1px; border:1px solid currentColor; border-radius:2.5px; }
 .battery-icon::after { content:""; position:absolute; left:calc(100% + 1px); top:2px; height:3px; width:1.5px; border-radius:1px; background:currentColor; }
 .battery-icon i { background:currentColor; border-radius:1px; }

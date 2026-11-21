@@ -37,6 +37,7 @@ pub struct Direct {
     pub vendor_active: bool,
     pub vendor_status: String,
     pub battery: Option<u8>,
+    pub charging: Option<(Instant, bool)>,
     pub transmitter: Option<bool>,
     pub lights: Option<(Instant, crate::lighting::Lights)>,
     pub vendor_events: u64,
@@ -75,7 +76,8 @@ impl Direct {
     }
     pub fn snapshot(&self) -> serde_json::Value {
         let lights=self.lights.as_ref().filter(|(seen,_)|self.transmitter==Some(true) && seen.elapsed()<Duration::from_secs(12)).map(|(_,v)|v);
-        serde_json::json!({"vendorActive":self.vendor_active,"vendorStatus":self.vendor_status,"vendorEvents":self.vendor_events,"battery":self.battery,"transmitter":self.transmitter,"lights":lights,"sources":self.sources,"status":self.status,"reports":self.reports,"lastSource":self.last_source,
+        let charging=self.charging.filter(|(seen,_)|self.transmitter==Some(true) && seen.elapsed()<Duration::from_secs(25)).map(|(_,v)|v);
+        serde_json::json!({"vendorActive":self.vendor_active,"vendorStatus":self.vendor_status,"vendorEvents":self.vendor_events,"battery":self.battery,"charging":charging,"transmitter":self.transmitter,"lights":lights,"sources":self.sources,"status":self.status,"reports":self.reports,"lastSource":self.last_source,
             "calibrated":self.mappings.keys().collect::<Vec<_>>(),
             "learning":self.learning.as_ref().map(|s|serde_json::json!({"role":s.role,"round":if s.first.is_some(){2}else{1},"received":!s.current.streams.is_empty()}))})
     }
@@ -227,6 +229,14 @@ impl Runtime {
             self.set_diagnostic(self.diagnostic);
         }
         self.direct.vendor_active = false;
+    }
+    pub fn transmitter_online(&mut self, online: bool) {
+        if !online && self.direct.transmitter != Some(false) {
+            // Raw HID interfaces remain present while the paired handset sleeps.
+            self.set_diagnostic(self.diagnostic);
+            self.direct.vendor_active = false;
+        }
+        self.direct.transmitter = Some(online);
     }
     pub fn vendor_input(&mut self, role: &str, phase: &str, steps: i32) {
         self.direct.vendor_events += 1;

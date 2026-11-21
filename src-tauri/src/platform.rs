@@ -6,12 +6,65 @@ mod win {
         unsafe{if SendInput(1,&input,size_of::<INPUT>() as i32)==1{Ok(())}else{Err("目标窗口拒绝快捷键，请检查权限".into())}}
     }
     pub fn key(vk:u16,up:bool)->Result<(),String>{
+        dispatch(shortcut_input(vk, up))
+    }
+    fn shortcut_input(vk: u16, up: bool) -> INPUT {
         let mut event:INPUT=unsafe{zeroed()};
+        let mouse = match vk {
+            1 => Some((MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0)),
+            2 => Some((MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0)),
+            4 => Some((MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0)),
+            5 | 6 => Some((MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, u32::from(vk - 4))),
+            _ => None,
+        };
+        if let Some((down, release, data)) = mouse {
+            event.r#type=INPUT_MOUSE;
+            event.Anonymous.mi=MOUSEINPUT{dx:0,dy:0,mouseData:data,dwFlags:if up{release}else{down},time:0,dwExtraInfo:0};
+            return event
+        }
         event.r#type=INPUT_KEYBOARD;
         event.Anonymous.ki=KEYBDINPUT{wVk:vk,wScan:0,dwFlags:(if up{KEYEVENTF_KEYUP}else{0}) | (if matches!(vk,0xa3|0xa5|0x5b|0x5c|0x21..=0x28|0x2e){KEYEVENTF_EXTENDEDKEY}else{0}),time:0,dwExtraInfo:0};
-        dispatch(event)
+        event
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn mouse_shortcuts_have_matching_press_and_release_events() {
+            for (name, down, up, data) in [
+                ("鼠标左键", MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0),
+                ("鼠标中键", MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+                ("鼠标右键", MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0),
+                ("鼠标后退键", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, 1),
+                ("鼠标前进键", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, 2),
+            ] {
+                let vk = crate::model::vk(name).unwrap();
+                for (released, flags) in [(false, down), (true, up)] {
+                    let input = shortcut_input(vk, released);
+                    assert_eq!(input.r#type, INPUT_MOUSE);
+                    let mouse = unsafe { input.Anonymous.mi };
+                    assert_eq!((mouse.dwFlags, mouse.mouseData), (flags, data));
+                }
+            }
+            assert_eq!(shortcut_input(0x11, false).r#type, INPUT_KEYBOARD);
+        }
     }
     pub fn held(v:u16)->bool{unsafe{GetAsyncKeyState(v as i32)<0}}
+    pub fn wechat_chat_window() -> Option<isize> {
+        unsafe {
+            let window = GetForegroundWindow();
+            let name = foreground().to_lowercase();
+            if !matches!(name.as_str(), "wechat.exe" | "weixin.exe") { return None; }
+            super::windows_launcher::is_wechat_main(window).then_some(window as isize)
+        }
+    }
+    pub fn pointer_in_window(window:isize)->bool {
+        unsafe {
+            let mut point=zeroed();
+            GetCursorPos(&mut point)!=0 && GetAncestor(WindowFromPoint(point),GA_ROOT) as isize == window
+        }
+    }
     pub fn scroll(steps:i32)->Result<(),String>{
         let mut e:INPUT=unsafe{zeroed()};e.r#type=INPUT_MOUSE;e.Anonymous.mi=MOUSEINPUT{dx:0,dy:0,mouseData:(steps*120)as u32,dwFlags:MOUSEEVENTF_WHEEL,time:0,dwExtraInfo:0};dispatch(e)
     }
@@ -35,6 +88,8 @@ mod win {
 #[path="mac_input.rs"]
 mod mac;
 #[cfg(target_os="macos")] pub use mac::*;
+#[cfg(target_os="macos")] pub fn wechat_chat_window()->Option<isize>{None}
+#[cfg(target_os="macos")] pub fn pointer_in_window(_:isize)->bool{false}
 pub fn press(keys:&[String])->Result<Vec<u16>,String>{
     let mut owned=Vec::new();
     for k in keys{
@@ -57,7 +112,7 @@ pub fn valid_launch_target(app:&str)->bool {
 #[path = "windows_launcher.rs"]
 mod windows_launcher;
 #[cfg(windows)]
-pub use windows_launcher::Launcher;
+pub use windows_launcher::{Launcher, restore_wechat_for_focus, wechat_qt_window};
 #[cfg(windows)]
 pub fn launch_is_foreground(target: &str, _: &str) -> bool { windows_launcher::is_foreground(target) }
 

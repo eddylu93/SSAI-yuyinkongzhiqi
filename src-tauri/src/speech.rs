@@ -21,6 +21,12 @@ pub fn recognize(wav:&[u8])->Result<String,String>{
 pub fn target(id:&str,text:&str)->Result<String,String>{shell(include_str!("target.ps1"),&json!({"id":id,"text":text}).to_string())}
 pub struct Capture{stop:Sender<bool>,pub output:Receiver<Result<(Vec<u8>,String),String>>}
 impl Capture{
+    #[cfg(test)]
+    pub fn test_stop_signal() -> (Self, Receiver<bool>) {
+        let (stop, signal) = mpsc::channel();
+        let (_, output) = mpsc::channel();
+        (Self {stop, output}, signal)
+    }
     pub fn start(endpoint:String)->Self{
         let (stop,signal)=mpsc::channel();let (send,output)=mpsc::channel();
         std::thread::spawn(move||{

@@ -1,5 +1,6 @@
 <script setup>
 import {computed,ref} from 'vue';
+import BatteryReading from './BatteryReading.vue';
 import unit from '../docs/界面素材/AU05.png';
 import {invoke} from '@tauri-apps/api/core';
 const props=defineProps({state:Object,config:Object,section:String});
@@ -23,7 +24,7 @@ async function test(value){
   <div class="receiver block">
     <div class="receiver-photo"><img :src="unit" alt="AU05 机身正面"></div>
     <div><h2>Ulanzi AU05</h2><p><i class="dot" :class="{online:state.online}"></i>{{state.online?'USB 接收器已连接':'等待连接 USB 接收器'}}</p>
-    <dl class="device-facts"><div><dt>机身</dt><dd>{{hid.transmitter==null?'状态未知':hid.transmitter?'在线':'离线'}}</dd></div><div><dt>电量</dt><dd>{{hid.battery==null?'未知':hid.battery+'%'}}</dd></div><div><dt>输入接口</dt><dd>{{hid.sources?.length??0}} 个</dd></div></dl></div>
+    <dl class="device-facts"><div><dt>机身</dt><dd>{{hid.transmitter==null?'状态未知':hid.transmitter?'在线':'离线'}}</dd></div><div><dt>电量</dt><dd><BatteryReading :state="state" detailed/></dd></div><div><dt>输入接口</dt><dd>{{hid.sources?.length??0}} 个</dd></div></dl></div>
   </div>
   <div class="block"><div class="setting-row"><div><h2>设备直控</h2><p class="muted">通过 USB 接收器读取三个实体键和旋钮。</p></div>
     <label><input class="switch" aria-label="启用设备直控" type="checkbox" :checked="config.vendorControls" @change="emit('control',$event.target.checked)"></label></div>

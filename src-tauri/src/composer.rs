@@ -29,6 +29,16 @@ pub struct FocusJob {
 impl FocusJob {
     #[cfg(windows)]
     pub fn start(target: &'static Target) -> Result<Self, String> {
+        Self::spawn(target, None)
+    }
+    #[cfg(windows)]
+    pub fn repeat_voice(window: isize) -> Result<Self,String> {
+        Self::spawn(target("wechat").ok_or("缺少微信配置")?, Some(window))
+    }
+    #[cfg(not(windows))]
+    pub fn repeat_voice(_: isize) -> Result<Self,String> { Err("微信续写仅支持 Windows".into()) }
+    #[cfg(windows)]
+    fn spawn(target: &'static Target, pinned: Option<isize>) -> Result<Self, String> {
         use base64::Engine;
         use std::{
             os::windows::process::CommandExt,
@@ -45,10 +55,23 @@ impl FocusJob {
             .collect();
         let command = base64::engine::general_purpose::STANDARD.encode(utf16);
         let mut process = Command::new(exe);
-        if target.id == "wechat" {
+        let helper = std::env::current_exe().map_err(|e|e.to_string())?.with_file_name("WeChatVoiceFocus.exe");
+        let fast = pinned.is_some() && helper.is_file() && crate::platform::wechat_qt_window(pinned.unwrap_or_default());
+        if fast {
+            process = Command::new(helper);
+            process.arg(pinned.unwrap().to_string());
+        } else {
+            process.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &command]);
+        }
+        if let Some(window) = pinned {
+            process.env("AU05_VOICE_WINDOW",window.to_string());
+        } else if target.id == "wechat" {
+            crate::platform::restore_wechat_for_focus()?;
+        }
+        if target.id == "wechat" && !fast {
             process.env("AU05_WECHAT_HELPER", include_str!("wechat_composer.cs"));
         }
-        let child = process.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &command])
+        let child = process
             .env("AU05_FOCUS_TARGET", serde_json::to_string(target).map_err(|e| e.to_string())?)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

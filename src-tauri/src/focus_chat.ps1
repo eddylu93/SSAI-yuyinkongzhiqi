@@ -28,12 +28,15 @@ public static class ComposerWindow {
     }
 }
 "@
-function Find-ChatWindow {
-    $candidates = @(Get-Process -Name $target.processes -ErrorAction SilentlyContinue | Where-Object {
-        $_.MainWindowHandle -ne 0 -and (!$target.package -or
+function Get-ChatProcesses {
+    Get-Process -Name $target.processes -ErrorAction SilentlyContinue | Where-Object {
+        $_.SessionId -eq [Diagnostics.Process]::GetCurrentProcess().SessionId -and (!$target.package -or
           (($_.Path -split '\\') -like $target.package.Split('!')[0]) -or
           ($_.ProcessName -eq $target.id -and $_.MainModule.FileVersionInfo.ProductName -like ('*'+$target.name+'*')))
-    })
+    }
+}
+function Find-ChatWindow {
+    $candidates = @(Get-ChatProcesses | Where-Object MainWindowHandle -ne 0)
     $front = [ComposerWindow]::GetForegroundWindow()
     $chosen = $candidates | Where-Object MainWindowHandle -eq $front | Select-Object -First 1
     if ($chosen) {return $chosen}
@@ -42,12 +45,15 @@ function Find-ChatWindow {
 }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $app = Find-ChatWindow
+if ($env:AU05_VOICE_WINDOW -and (!$app -or [ComposerWindow]::GetForegroundWindow().ToInt64() -ne [long]$env:AU05_VOICE_WINDOW)) {exit 3}
 if (!$app) {
     $installed = @(Get-StartApps | Where-Object {
         ($target.package -and $_.AppID -like $target.package) -or $_.Name -in $target.startNames
     })
-    if ($installed.Count -ne 1) {exit 2}
-    Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\'+$installed[0].AppID)
+    if (@(Get-ChatProcesses).Count -eq 0) {
+        if ($installed.Count -ne 1) {exit 2}
+        Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\'+$installed[0].AppID)
+    }
     while (!$app -and $clock.Elapsed.TotalSeconds -lt 9) {
         Start-Sleep -Milliseconds 140
         $app = Find-ChatWindow
@@ -70,8 +76,11 @@ if ($target.id -eq 'wechat') {
     elseif ($main.Count -eq 1) { $window = [IntPtr]$main[0].Current.NativeWindowHandle }
     elseif ($windows.Count -gt 1) { exit 2 }
 }
-if ([ComposerWindow]::IsIconic($window)) {[void][ComposerWindow]::ShowWindowAsync($window,9)}
+if ($env:AU05_VOICE_WINDOW) {
+    if ($window.ToInt64() -ne [long]$env:AU05_VOICE_WINDOW -or [ComposerWindow]::GetForegroundWindow() -ne $window) {exit 3}
+} elseif ([ComposerWindow]::IsIconic($window)) {[void][ComposerWindow]::ShowWindowAsync($window,9)}
 if ([ComposerWindow]::GetForegroundWindow() -ne $window) {
+    if ($env:AU05_VOICE_WINDOW) {exit 3}
     [void](New-Object -ComObject WScript.Shell).AppActivate($app.Id)
     [void][ComposerWindow]::SetForegroundWindow($window)
     if ([ComposerWindow]::GetForegroundWindow() -ne $window) {

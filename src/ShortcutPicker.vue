@@ -3,11 +3,12 @@ import {computed,ref,onMounted,onBeforeUnmount} from 'vue';
 const value=defineModel({type:String,required:true});
 const expanded=ref(false), recording=ref(false), root=ref(null), message=ref('');
 const mac=/Macintosh/.test(navigator.userAgent);
+const mouseButtons=['鼠标左键','鼠标中键','鼠标右键','鼠标后退键','鼠标前进键'];
 const modifiers=['Ctrl','Win','Alt','Shift','RightShift','RightAlt','RightWin','RightCtrl'];
 const move=['Home','End','PageUp','PageDown','Left','Up','Down','Right','Delete'];
 const rows=[['Esc',...Array.from({length:12},(_,i)=>'F'+(i+1))],
  [...'1234567890','Backspace'],['Tab',...'QWERTYUIOP'],[...'ASDFGHJKL','Enter'],
- [...'ZXCVBNM','Space'],modifiers,move];
+ [...'ZXCVBNM','Space'],modifiers,move,...(mac?[]:[mouseButtons])];
 const captions={Left:'←',Right:'→',Up:'↑',Down:'↓',PageUp:'PgUp',PageDown:'PgDn',RightCtrl:'右 Ctrl',
  RightAlt:mac?'右 Option':'右 Alt',RightShift:'右 Shift',RightWin:mac?'右 ⌘':'右 Win',Win:mac?'⌘':'Win'};
 const names={ControlLeft:'LeftCtrl',ControlRight:'RightCtrl',ShiftLeft:'LeftShift',ShiftRight:'RightShift',
@@ -28,7 +29,11 @@ function pick(key){
  }else if(mods.length<5){value.value=[...mods,key].join('+')}else{message.value='请先取消一个修饰键'}
 }
 const down=new Set();let pending=[],consumed=new Set(),dialog;
-function start(){recording.value=!recording.value;down.clear();pending=[];consumed.clear();message.value=''}
+let blockClick=false;
+function start(e){
+ if(blockClick && e.detail){blockClick=false;return}
+ recording.value=!recording.value;down.clear();pending=[];consumed.clear();message.value='';
+}
 function stop(){recording.value=false;down.clear();pending=[]}
 function capture(e){
  if(!recording.value&&!consumed.has(e.code))return;
@@ -41,12 +46,22 @@ function capture(e){
    message.value='当前快捷键不支持这个键，请重新录入';stop();return;
  }
  if(isMod){down.add(key);pending=[...down];return}
+ finishChord(e,key);
+}
+function finishChord(e,key){
  const mods=[...down];
  for(const [pressed,generic] of [[e.ctrlKey,'Ctrl'],[e.altKey,'Alt'],[e.shiftKey,'Shift'],[e.metaKey,'Win']]){
    if(pressed&&!mods.some(k=>(aliases[k]??k).replace(/^Right/,'')===generic))mods.push(generic);
  }
  if(mods.length<5){value.value=[...mods,key].join('+')}else{message.value='每组快捷键最多录入五个键'}
  stop();
+}
+function captureMouse(e){
+ blockClick=false;
+ if(mac || !recording.value || !mouseButtons[e.button])return;
+ e.preventDefault();e.stopPropagation();
+ blockClick=e.button===0;
+ finishChord(e,mouseButtons[e.button]);
 }
 function release(e){
  if(!consumed.delete(e.code))return;
@@ -78,7 +93,7 @@ onBeforeUnmount(()=>{
 </script>
 <template><div ref="root" class="shortcut-picker stack">
 <label>键值<input v-model="value" placeholder="Ctrl+Shift+V" @keydown.esc.prevent.stop="value=[$event.ctrlKey&&'Ctrl',$event.altKey&&'Alt',$event.shiftKey&&'Shift',$event.metaKey&&'Win','Esc'].filter(Boolean).join('+')" @keyup.esc.prevent.stop></label>
-<div class="picker-tools"><button type="button" :aria-pressed="recording" @click="start" @keydown="capture" @keyup="release" @blur="stop();consumed.clear()">{{recording?'请按下快捷键…':'录入快捷键'}}</button>
+<div class="picker-tools"><button type="button" :aria-pressed="recording" @click="start" @mousedown="captureMouse" @contextmenu.prevent @auxclick.prevent @keydown="capture" @keyup="release" @blur="stop();consumed.clear()">{{recording?(mac?'请按下快捷键…':'按键盘，或在此按鼠标键…'):'录入快捷键'}}</button>
 <button type="button" :aria-expanded="expanded" @click="expanded=!expanded">虚拟键盘</button></div>
 <div v-if="expanded" class="key-board" role="group" aria-label="虚拟键盘">
 <div v-for="(row,index) in rows" :key="index" class="key-row"><button v-for="key in row" :key="key" type="button" :aria-label="key" :aria-pressed="selected.some(k=>(aliases[k]??k)===key)" @click="pick(key)">{{captions[key]??key}}</button></div>

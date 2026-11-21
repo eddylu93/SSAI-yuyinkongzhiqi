@@ -12,6 +12,8 @@ struct Run { steps:VecDeque<Action>,due:Instant,target:String,awaiting:Option<(S
 pub struct Runtime {
     input_test: crate::input_test::InputTest,
     focus: Option<crate::composer::FocusJob>,
+    pending_voice: Option<(String,isize)>,
+    last_wechat: Option<isize>,
     launcher: platform::Launcher,
     pub direct:crate::direct::Direct,pub config:Config,pub db:Connection,pub online:bool,pub bindings:HashMap<String,String>,
     pub event_count:u64,pub message:String,pub diagnostic:bool,pub recent:VecDeque<String>,
@@ -35,7 +37,7 @@ impl Runtime {
         let config:Config=match saved{Some(s)=>serde_json::from_str(&s).map_err(|_|"配置损坏，请恢复备份")?,None=>Config::default()};
         config.validate()?;
         let direct=crate::direct::Direct::load(&db)?;
-        Ok(Self{launcher:Default::default(),focus:None,input_test:Default::default(),direct,config,db,online:false,bindings:HashMap::new(),event_count:0,message:"正在检测 AU05 接收器".into(),diagnostic:false,recent:VecDeque::new(),held:HashMap::new(),pending:HashMap::new(),voice:None,run:None,result:None})
+        Ok(Self{launcher:Default::default(),focus:None,pending_voice:None,last_wechat:None,input_test:Default::default(),direct,config,db,online:false,bindings:HashMap::new(),event_count:0,message:"正在检测 AU05 接收器".into(),diagnostic:false,recent:VecDeque::new(),held:HashMap::new(),pending:HashMap::new(),voice:None,run:None,result:None})
     }
     pub fn save(&mut self,mut config:Config)->Result<(),String>{
         config.validate()?;
@@ -46,6 +48,10 @@ impl Runtime {
         if self.config.voice_enabled && !config.voice_enabled{self.end_voice(true)}
         if !config.history {if let Some(v)=self.voice.as_mut(){v.record=false}if let Some(r)=self.result.as_mut(){r.record=false}}
         if self.config.vendor_controls!=config.vendor_controls {self.set_diagnostic(self.diagnostic);}
+        if self.config.voice_enabled != config.voice_enabled || self.config.tool != config.tool || self.config.voice_keys != config.voice_keys || self.config.toggle_voice != config.toggle_voice {
+            if self.pending_voice.take().is_some(){self.focus=None;}
+            self.last_wechat=None;
+        }
         self.config=config;Ok(())
     }
     pub fn snapshot(&self)->Value{
@@ -75,7 +81,13 @@ impl Runtime {
         if let Some(mut v)=self.voice.take(){
             platform::release(&mut v.owned);
             let mut msg=if interrupted{"语音已中断，请检查输入工具"}else{"已发送结束指令，等待输入工具出字"}.to_string();
-            if v.toggle && !interrupted{if let Err(e)=platform::tap(&v.keys){msg=e}}
+            if v.toggle {
+                if !interrupted || (!v.target.is_empty() && platform::foreground() == v.target) {
+                    if let Err(e)=platform::tap(&v.keys){msg=e}
+                } else {
+                    msg="语音已中断且窗口已切换，请在原输入工具中结束听写".into();
+                }
+            }
             if let Some(cap)=v.capture.take(){
                 cap.finish(!interrupted);
                 if !interrupted{
@@ -103,19 +115,24 @@ impl Runtime {
         } else { self.log(format!("{control} · {phase}")); }
         if self.diagnostic { self.input_test.record(control,phase,steps); return Ok(()); }
         if control=="K1"{
+            if phase=="up" && self.pending_voice.as_ref().is_some_and(|(owner,_)|owner==id){
+                self.pending_voice=None;self.focus=None;
+                return Ok(())
+            }
             if phase=="up" && self.voice.as_ref().is_some_and(|v|v.instance==id){self.end_voice(false)}
             if phase=="down" && self.voice.is_none(){
                 if !self.config.voice_enabled{return Ok(())}
                 if self.focus.is_some(){return Err("正在聚焦聊天框，请等待就绪再按住语音键".into())}
-                let keys=self.config.voice_keys.clone();
-                self.result=None;
-                let local=self.config.tool=="Windows 系统识别";
-                if local && self.config.endpoint.is_empty(){return Err("请先选择 AU05 麦克风".into())}
-                let capture=local.then(||crate::speech::Capture::start(self.config.endpoint.clone()));
-                let toggle=!local && self.config.toggle_voice;
-                let owned=if local{Vec::new()}else if toggle{platform::tap(&keys)?;Vec::new()}else{platform::press(&keys)?};
-                self.voice=Some(Voice{instance:id.into(),at:Instant::now(),owned,toggle,keys,capture,target:platform::foreground(),record:self.config.history});
-                self.log("已触发输入工具".into());
+                let window=platform::wechat_chat_window();
+                if self.config.tool=="微信输入法" && window.is_some() && window==self.last_wechat
+                    && !self.config.voice_keys.iter().any(|k|k.starts_with("鼠标")) {
+                    let hwnd=window.unwrap();
+                    self.focus=Some(crate::composer::FocusJob::repeat_voice(hwnd)?);
+                    self.pending_voice=Some((id.to_owned(),hwnd));
+                    self.log("正在恢复微信输入位置".into());
+                } else {
+                    self.begin_voice(id,window)?;
+                }
             }
             return Ok(())
         }
@@ -147,6 +164,24 @@ impl Runtime {
         }
         Ok(())
     }
+    fn begin_voice(&mut self,id:&str,window:Option<isize>)->Result<(),String>{
+        let builtin=self.config.tool=="微信内置语音";
+        if builtin && !window.is_some_and(platform::pointer_in_window){
+            return Err("请打开微信并将鼠标放在聊天输入框或语音按钮上".into())
+        }
+        let keys=if builtin{vec!["鼠标左键".into()]}else{self.config.voice_keys.clone()};
+        self.result=None;
+        let local=self.config.tool=="Windows 系统识别";
+        if local && self.config.endpoint.is_empty(){return Err("请先选择 AU05 麦克风".into())}
+        let target=platform::foreground();
+        let capture=local.then(||crate::speech::Capture::start(self.config.endpoint.clone()));
+        let toggle=!local && !builtin && self.config.toggle_voice;
+        let owned=if local{Vec::new()}else if toggle{platform::tap(&keys)?;Vec::new()}else{platform::press(&keys)?};
+        self.voice=Some(Voice{instance:id.into(),at:Instant::now(),owned,toggle,keys,capture,target,record:self.config.history});
+        self.last_wechat=window;
+        self.log("已触发输入工具".into());
+        Ok(())
+    }
     fn execute(&mut self,a:Action)->Result<(),String>{
         match a{
             Action::None=>{},Action::Shortcut{keys}=>platform::tap(&keys)?,Action::Scroll{steps}=>platform::scroll(steps)?,
@@ -161,7 +196,7 @@ impl Runtime {
         }
         Ok(())
     }
-    pub fn cancel(&mut self){self.launcher.cancel();self.focus=None;self.run=None}
+    pub fn cancel(&mut self){self.launcher.cancel();self.pending_voice=None;self.focus=None;self.run=None;self.last_wechat=None}
     fn start_focus(&mut self,id:&str)->Result<(),String>{
         if self.focus.is_some() || self.voice.is_some(){return Err("聚焦或语音操作正在进行".into())}
         let target=crate::composer::target(id).ok_or("未知聊天工具")?;
@@ -201,7 +236,16 @@ impl Runtime {
             let name=job.target.name.clone();
             self.focus=None;
             let foreground=platform::foreground();
-            if let Err(e)=result{self.run=None;self.log(e);return}
+            let pending=self.pending_voice.take();
+            if let Err(e)=result{self.last_wechat=None;self.run=None;self.log(e);return}
+            if let Some((id,window))=pending {
+                if platform::wechat_chat_window()==Some(window) {
+                    // The opaque Qt editor may place the caret at the click point.
+                    // Continue after the draft, without replacing a selection.
+                    if let Err(e)=platform::tap(&["Ctrl".into(),"End".into()]).and_then(|_|self.begin_voice(&id,Some(window))){self.log(e)}
+                }
+                return
+            }
             if let Some(run)=self.run.as_mut(){run.target=foreground;}
             self.log(format!("{name} 输入框已聚焦，可以按住语音键"));
         }
@@ -321,6 +365,39 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));desk.tick();
         }
         assert_eq!(desk.message,"组合执行完毕");
+    }
+    #[test]
+    fn input_interruption_cancels_capture_once_and_accepts_a_new_press() {
+        for removed in [true, false] {
+            let mut fixture = Fixture::new();
+            let d = fixture.app();
+            d.hid_connection(vec!["test".into()], "ready".into(), true);
+            d.transmitter_online(true);
+            let (capture, stopped) = crate::speech::Capture::test_stop_signal();
+            d.voice = Some(Voice { instance:"K1".into(), at:Instant::now(), owned:vec![],
+                toggle:false, keys:vec![], capture:Some(capture), target:String::new(), record:false });
+            if removed {
+                d.hid_connection(vec![], "removed".into(), false);
+                d.hid_connection(vec!["test".into()], "ready".into(), true);
+            } else {
+                d.transmitter_online(false);
+                d.transmitter_online(false);
+                d.transmitter_online(true);
+            }
+            assert_eq!(stopped.try_recv(), Ok(false));
+            assert!(d.voice.is_none() && d.result.is_none());
+            // An empty key list in the fixture sends no OS input.
+            d.config.tool = "自定义".into();
+            d.config.voice_keys.clear();
+            d.config.voice_enabled = true;
+            d.input("K1","K1","down",0).unwrap();
+            assert!(d.voice.is_some());
+            d.input("K1","K1","up",0).unwrap();
+            let counts: (i64,i64) = d.db.query_row(
+                "SELECT COUNT(*), SUM(interrupted) FROM usage WHERE control='K1'",
+                [], |row| Ok((row.get(0)?,row.get(1)?))).unwrap();
+            assert_eq!(counts, (2,1));
+        }
     }
     #[test]
     fn diagnostic_events_never_count_or_execute(){

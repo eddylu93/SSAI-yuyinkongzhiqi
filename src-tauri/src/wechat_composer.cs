@@ -113,4 +113,14 @@ public static class WeChatComposer {
             if (oldContext != IntPtr.Zero) SetThreadDpiAwarenessContext(oldContext);
         }
     }
+
+    // Also built as a small console helper for the latency-sensitive voice key.
+    public static int Main(string[] args) {
+        long value;
+        if (args.Length != 1 || !long.TryParse(args[0], out value)) return 4;
+        IntPtr window = new IntPtr(value);
+        if (GetForegroundWindow() != window || !Focus(window)) return 4;
+        Console.WriteLine(value);
+        return 0;
+    }
 }
